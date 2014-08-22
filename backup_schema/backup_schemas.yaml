@@ -1,0 +1,14 @@
+thresholds:
+    daily: 7
+    weekly: 4
+
+backup_path: /data/backup/schemas
+
+database: db_name
+
+daily_to_weekly_pattern: sunday
+
+schemas:
+    - my_cool_schema1
+    - my_not_so_cool_schema1
+
