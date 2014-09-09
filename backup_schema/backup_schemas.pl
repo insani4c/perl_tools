@@ -1,6 +1,5 @@
 #!/usr/bin/env perl 
-#$Id$
-
+# $Id$
 use strict;
 use warnings;
 use utf8;
@@ -13,6 +12,8 @@ use File::Path qw/make_path/;
 use File::Copy;
 use Data::Dumper;
 use POSIX qw/setuid/;
+use File::Basename;
+
 
 my ($help, $cfg_file, $schema, $verbose, $debug) = @_;
 # Check command line arguments
@@ -37,7 +38,7 @@ unless ($user eq 'postgres') {
 }
 
 # default config file
-$cfg_file //= '/etc/perl_tools/backup_schema_full.yaml';
+$cfg_file //= '/etc/perl_tools/backup_schemas.yaml';
 my $cfg ;
 # check if config file exists and then load it
 # otherwise die
@@ -100,7 +101,7 @@ sub check_backups {
 
     if(scalar @sorted >= $cfg->{thresholds}{$period}){
         p_info("Rotating backups for period '$period'");
-        rotate_backups($period, \@sorted);
+        rotate_backups($period, $schema, \@sorted);
     }
 }
 
@@ -120,7 +121,7 @@ sub return_backup_path {
 # daily backups are rotated if the exceed a configured threshold
 #
 sub rotate_backups {
-    my($period, $files) = @_;
+    my($period, $schema, $files) = @_;
 
     p_debug("All Files: ".Dumper($files));
     p_debug("$period threshold: ".$cfg->{thresholds}{$period});
@@ -138,8 +139,9 @@ sub rotate_backups {
         foreach my $file (@to_move_files){
             # move backups to weekly
             if($file =~ /$cfg->{daily_to_weekly_pattern}/){
-                p_info("Moving daily backup '$file' to weekly");
-                move($file, return_backup_path('weekly', $schema) . '/' . $file)
+                my $weekly = return_backup_path('weekly', $schema) . '/';
+                p_info("Moving daily backup '$file' to $weekly");
+                move($file, $weekly) or warn "Could not move '$file' to '$weekly': $!\n";
             }
             else {
                 p_info("Removing backup '$file'");
@@ -221,11 +223,11 @@ __END__
 
 =head1 NAME
 
-backup_schema_full.pl - Create and rotate backups of PostgreSQL schemas
+backup_schemas.pl - Create and rotate backups of PostgreSQL schemas
 
 =head1 SYNOPSIS
 
-backup_schema_full.pl [options]
+backup_schemas.pl [options]
 
  Options
   --verbose        Print verbose messages
@@ -260,7 +262,7 @@ command line.
 
 =item B<--cfg>
 
-The default configuration should be located at /etc/perl_tools/backup_schema.yaml. This script
+The default configuration should be located at /etc/perl_tools/backup_schemas.yaml. This script
 needs a configuration file in order to run.
 This option allows to override the default configuration file path.
 
@@ -275,4 +277,3 @@ Since all backup files contain the day name, the B<daily_to_weekly_pattern> shou
 which a daily backup should be moved into the weekly folder.
 
 =cut
-
