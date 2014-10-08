@@ -63,6 +63,7 @@ foreach my $service ( keys %services ) {
     if( -f $services{$service}->{pidfile} ) {
         my $pid = read_file( glob($services{$service}->{pidfile}) );
  
+ 	    chomp($pid);
         # If we get a pid ensure that it is running, and that we can signal it
         $pid && exists($procs{$pid}) && kill(0, $pid) && next;  
         
