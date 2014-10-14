@@ -53,7 +53,7 @@ if(  -f '/etc/default/watchdog.yaml' ){
 my $processes = Proc::ProcessTable->new;
 my %procs; 
 my %matched_procs;
-foreach my $p (@{ $processes }){
+foreach my $p (@{ $processes->table }){
     $procs{ $p->{pid} } = $p->{cmndline};
     foreach my $s (keys %services){
         if($p->{cmndline} =~ m#$services{$s}->{re}#){
@@ -65,8 +65,10 @@ foreach my $p (@{ $processes }){
  
 # Search the process table for not running services
 foreach my $service ( keys %services ) {
-    if( -f $services{$service}->{pidfile} ) {
-        my $pid = read_file( glob($services{$service}->{pidfile}) );
+    my ($pidfile) = ( glob($services{"$service"}->{pidfile}) )[0];
+
+    if( -f $pidfile ) {
+        my $pid = read_file( $pidfile );
  	    chomp($pid);
  
         # found a PID in PID file
@@ -78,36 +80,36 @@ foreach my $service ( keys %services ) {
             }
             else {
                 # Service was found in the process list but the PID in the PID file doesnt match
-                if( scalar @{ $matched_procs{$service} } ) {
+                if(defined $matched_procs{$service} &&  scalar @{ $matched_procs{$service} } ) {
                     print "- Process '$service' not running with PID '$pid' (PID_file: "
-                          . glob($services{$service}->{pidfile}) . "), killing process(es)...\n";
+                          . $pidfile . "), killing process(es)...\n";
                     # Kill the processes so that it can be restarted
                     kill(15, $_)  foreach @{ $matched_procs{$service} };
                 }
             }
         }
         # No PID in file, let's search for processes that match the regular expression
-        elsif(scalar @{ $matched_procs{$service} }){
+        elsif(defined $matched_procs{$service} && scalar @{ $matched_procs{$service} }){
             # kill the found processes, we will restart it lateron
             print "- Process '$service' running, no PID in PID_file: "
-                  . glob($services{$service}->{pidfile}) . ", killing process(es)...\n";
+                  . $pidfile . ", killing process(es)...\n";
             kill(15, $_)  foreach @{ $matched_procs{$service} };
         }
     }
     # No PID file, let's search for processes that match the regular expression
     else {
         # check if the configured process regex matches
-        if( scalar @{ $matched_procs{$service} } ){
+        if(defined $matched_procs{$service} &&  scalar @{ $matched_procs{$service} } ){
             print "- Process '$service' running, no PID_file: "
-                  . glob($services{$service}->{pidfile}) . " found, killing process(es)...\n";
+                  . $pidfile . " found, killing process(es)...\n";
             # kill the found processes, we will restart it lateron
             kill(15, $_)  foreach @{ $matched_procs{$service} };
         }
     }
 
     # Remove the stale PID file because no running process for this PID file
-    unlink( $services{$service}->{pidfile} );
-    print "- Removed PID file '". $services{$service}->{pidfile} ."'\n";
+    unlink( $pidfile );
+    print "- Removed PID file '". $pidfile ."'\n";
     
     # Execute the service command
     system( $services{$service}->{'cmd'} );
@@ -123,4 +125,5 @@ foreach my $service ( keys %services ) {
         printf "Process '$service' successfully restarted, exit status:  %d\n", $? >> 8;
     }
 }
+
 
