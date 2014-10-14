@@ -1,4 +1,9 @@
 #!/usr/bin/env perl 
+#
+# Description: Monitor running processes
+# Author: Johnny Morano <jmorano@moretrix.com>
+# $Id$
+#
 use strict; use warnings;
 use utf8;
  
@@ -52,8 +57,8 @@ foreach my $p (@{ $processes }){
     $procs{ $p->{pid} } = $p->{cmndline};
     foreach my $s (keys %services){
         if($p->{cmndline} =~ m#$services{$s}->{re}#){
-            $matched_procs{$s}++;
-			last;
+            push @{ $matched_procs{$s} }, $p->{pid};
+            last;
         }
     }
 }
@@ -63,19 +68,46 @@ foreach my $service ( keys %services ) {
     if( -f $services{$service}->{pidfile} ) {
         my $pid = read_file( glob($services{$service}->{pidfile}) );
  
-        # If we get a pid ensure that it is running, and that we can signal it
-        $pid && exists($procs{$pid}) && kill(0, $pid) && next;  
+        # found a PID in PID file
+        if($pid){
+            # The found PID exists in the process list
+            if( exists($procs{$pid}) ){
+                # If we get a pid ensure that it is running, and that we can signal it
+                kill(0, $pid) && next;
+            }
+            else {
+                # Service was found in the process list but the PID in the PID file doesnt match
+                if( scalar @{ $matched_procs{$service} } ) {
+                    print "- Process '$service' not running with PID '$pid' (PID_file: "
+                          . glob($services{$service}->{pidfile}) . "), killing process(es)...\n";
+                    # Kill the processes so that it can be restarted
+                    kill(15, $_)  foreach @{ $matched_procs{$service} };
+                }
+            }
+        }
+        # No PID in file, let's search for processes that match the regular expression
+        elsif(scalar @{ $matched_procs{$service} }){
+            # kill the found processes, we will restart it lateron
+            print "- Process '$service' running, no PID in PID_file: "
+                  . glob($services{$service}->{pidfile}) . ", killing process(es)...\n";
+            kill(15, $_)  foreach @{ $matched_procs{$service} };
+        }
         
-        # Remove the stale PID file because no running process for this PID file
-        unlink( $services{$service}->{pidfile} );
     }
+    # No PID file, let's search for processes that match the regular expression
     else {
         # check if the configured process regex matches
-        if( exists($matched_procs{$service}) ){
-            # process is running but has no PID file
-            next;
+        if( scalar @{ $matched_procs{$service} } ){
+            print "- Process '$service' running, no PID_file: "
+                  . glob($services{$service}->{pidfile}) . " found, killing process(es)...\n";
+            # kill the found processes, we will restart it lateron
+            kill(15, $_)  foreach @{ $matched_procs{$service} };
         }
     }
+
+    # Remove the stale PID file because no running process for this PID file
+    unlink( $services{$service}->{pidfile} );
+    print "- Removed PID file '". $services{$service}->{pidfile} ."'\n";
     
     # Execute the service command
     system( $services{$service}->{'cmd'} );
