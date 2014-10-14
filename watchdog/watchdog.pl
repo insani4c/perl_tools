@@ -67,6 +67,7 @@ foreach my $p (@{ $processes }){
 foreach my $service ( keys %services ) {
     if( -f $services{$service}->{pidfile} ) {
         my $pid = read_file( glob($services{$service}->{pidfile}) );
+ 	    chomp($pid);
  
         # found a PID in PID file
         if($pid){
@@ -92,7 +93,6 @@ foreach my $service ( keys %services ) {
                   . glob($services{$service}->{pidfile}) . ", killing process(es)...\n";
             kill(15, $_)  foreach @{ $matched_procs{$service} };
         }
-        
     }
     # No PID file, let's search for processes that match the regular expression
     else {
